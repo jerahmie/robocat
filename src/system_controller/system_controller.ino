@@ -1,10 +1,22 @@
 
 /*!
-*
+* Main system controller (Arduino Uno R3)
 *
 *
 */
 
+#include <SPI.h>
+
+// SPI pins
+//const int DATAOUT = 11 // COPI
+//const int DATAIN	= 12 // CIPO
+//const int SPICLOCK = 13 // SCK
+const int CHIPSELECT = 10; // cs
+
+// global data buffer
+//char buffer [128];
+
+// motor shield gpio
 const int E1 = 3;  ///<Motor1 Speed (analog)
 const int E2 = 11; ///<Motor2 Speed (analog)
 const int E3 = 5;  ///<Motor3 Speed (analog)
@@ -100,8 +112,16 @@ void systems_check(void) ///<Execute a power-on systems check
 }
 
 
-
+// setup()
 void setup() {
+	   Serial.begin(9600);
+
+		 pinMode(CHIPSELECT, OUTPUT);
+		 digitalWrite(CHIPSELECT, LOW);
+		// configure SPI controller
+	   SPI.begin();
+		
+		// configure motor controller pins
      for (int i=3; i<9; i++) {
      	 pinMode(i,OUTPUT);
      }
@@ -109,9 +129,20 @@ void setup() {
      	 pinMode(i,OUTPUT);
      }
      delay(5000);  // wait 5 sec
+		// Power-on self test (POST)
      systems_check();  ///< Execute systems check.
      
 }
 
 void loop() {
+	unsigned int result = 0;
+	result = SPI.transfer(0x55);
+	Serial.write(result);
+	delay(500);
+	Serial.write(0x8);
+	delay(500);
+	Serial.write(0x7c);
+	delay(500);
+	Serial.write(0x8);
+	delay(500);
 }
