@@ -1,4 +1,3 @@
-
 /*!
 * Main system controller (Arduino Uno R3)
 *
@@ -12,9 +11,10 @@
 //const int DATAIN	= 12 // CIPO
 //const int SPICLOCK = 13 // SCK
 const int CHIPSELECT = 10; // cs
+volatile int indx;
 
 // global data buffer
-//char buffer [128];
+char spibuf [4];
 
 // motor shield gpio
 const int E1 = 3;  ///<Motor1 Speed (analog)
@@ -77,8 +77,6 @@ void M4_back(char Speed) ///<Motor4 Back off
 	analogWrite(E4, Speed);
 }
 
-
-
 void systems_check(void) ///<Execute a power-on systems check
 {
 	const char check_speed = 100;  // 0 to 255
@@ -112,14 +110,47 @@ void systems_check(void) ///<Execute a power-on systems check
 }
 
 
+// update motor values
+void update_motors(void) {
+	if (spibuf[0] == 0) {
+		M1_advance(spibuf[1]);
+	}
+	else if (spibuf[0] == 1) {
+	  M1_back(spibuf[1]);
+  }
+	else {
+		M1_advance(0);  // bad command.  stop M1 motor
+	}
+	if (spibuf[2] == 0) {
+		M4_advance(spibuf[3]);
+	}
+	else if (spibuf[2] == 1) {
+		M4_back(spibuf[3]);
+	}
+	else {
+		M4_advance(0);  // bad command.  Stop M4 motor.
+	}
+	// clear spibuf and reset index
+	for (int i=0; i<4; i++){
+		spibuf[i] = 0;
+	}
+	indx = 0;
+}
+
+
 // setup()
 void setup() {
 	   Serial.begin(9600);
-
-		 pinMode(CHIPSELECT, OUTPUT);
-		 digitalWrite(CHIPSELECT, LOW);
-		// configure SPI controller
-	   SPI.begin();
+		 SPCR |= _BV(SPE);  // turn on SPI in peripheral mode
+		 // initialize spi buffer 
+		 spibuf[0] = 0x44;
+		 spibuf[1] = 0x45;
+		 spibuf[2] = 0x41;
+		 spibuf[3] = 0x44;
+		 pinMode(CHIPSELECT, INPUT);
+		 //digitalWrite(CHIPSELECT, LOW);
+		// configure SPI as peripheral
+	   //SPI.begin();
 		
 		// configure motor controller pins
      for (int i=3; i<9; i++) {
@@ -130,19 +161,34 @@ void setup() {
      }
      delay(5000);  // wait 5 sec
 		// Power-on self test (POST)
-     systems_check();  ///< Execute systems check.
-     
+     //systems_check();  ///< Execute systems check.
+		 // SPI peripheral device setup
+
+		 pinMode(MISO, OUTPUT); //pinMode(MISO, OUTPUT);
+		 pinMode(MOSI, INPUT); //
+		 SPI.attachInterrupt();
 }
 
+ISR (SPI_STC_vect) {
+	//indx = 0;
+	byte c = SPDR;
+	SPDR = 0x00; 
+	if (indx < sizeof spibuf) {
+		spibuf[indx++] = c;
+	}
+}
+
+
+
 void loop() {
-	unsigned int result = 0;
-	result = SPI.transfer(0x55);
-	Serial.write(result);
+	Serial.write(spibuf);
+	update_motors();
+	//Serial.write("Update motors");
 	delay(500);
-	Serial.write(0x8);
-	delay(500);
-	Serial.write(0x7c);
-	delay(500);
-	Serial.write(0x8);
-	delay(500);
+	//Serial.write(0x8);
+	//delay(500);
+	//Serial.write(0x7c);
+	//delay(500);
+	//Serial.write(0x8);
+	//delay(500);
 }
